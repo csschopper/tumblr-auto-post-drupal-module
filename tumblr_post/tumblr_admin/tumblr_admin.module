@@ -1,0 +1,254 @@
+<?php
+
+/*
+ * To change this template, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+//************************************ Create Admin pages *****************************************************//
+
+function tumblr_admin_menu() {
+    $items['admin/config/tumblr/settings'] = array(
+        'title' => 'Tumblr information',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('tumblr_module_setings_form'),
+        'access arguments' => array('Access administration menu'),
+        'type' => MENU_LOCAL_TASK,
+    );
+
+    $items['admin/config/tumblr/contenttype/settings'] = array(
+        'title' => 'Tumblr Content Type Settings',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('tumblr_content_setings_form'),
+        'access arguments' => array('Access administration menu'),
+        'type' => MENU_LOCAL_TASK,
+    );
+
+    $items['admin/ajaxcallback/pages'] = array(
+        'title' => 'Ajax Callback Pages',
+        'page callback' => 'ajaxcallbackpage',
+        'access arguments' => array('Access administration menu'),
+        'type' => MENU_CALLBACK,
+    );
+    return $items;
+}
+
+//********************* Create Form for get all Content Types and images fields *******************************// 
+
+function tumblr_content_setings_form($form, &$form_state) {
+
+    global $base_path;
+
+    drupal_add_js(drupal_get_path("module", "tumblr_admin") . '/js/custom.js');
+
+    $types = node_type_get_types();
+
+    $form['tublr_content_key'] = array(
+        '#markup' => t('<h1>Select Content type for enable posting.</h1>'),
+    );
+    $form['check'] = array('#tree' => TRUE);
+
+    foreach ($types as $val) {
+
+        $result = db_select('tumblr_fields_data')
+                ->fields('tumblr_fields_data', array('status'))
+                ->condition('type', $val->type, '=')
+                ->condition('status', 1, '=')
+                ->execute()
+                ->fetchAssoc();
+
+        $form['check'][$val->type] = array(
+            '#prefix' => '<div class="' . $val->name . '">',
+            '#type' => 'checkbox',
+            '#title' => t($val->name),
+            '#return_value' => $val->type,
+            '#default_value' => ($result['status']) ? $val->type : 1,
+            '#attributes' => array(
+                'class' => array($val->name),
+            ),
+            '#suffix' => '</div><div id="' . $val->type . '" class="test_' . $val->type . '" style="padding: 0px 0px 0px 17px;"></div>',
+        );
+    }
+
+    $form['submit'] = array(
+        '#type' => 'submit',
+        '#value' => t('Save Configuration'),
+        '#validate' => array('tumblr_content_type_validate'),
+        '#submit' => array('tumblr_content_type_submit'),
+    );
+
+    //******************* Add js for click event ***************************//
+
+    drupal_add_js('jQuery(document).ready(function(){
+
+		//Hide div w/id extra
+                       jQuery("form :checked").each(function() {
+                                  MyAllHideFunc(jQuery(this).val(),"' . $base_path . '");
+                                });
+
+                jQuery("[type=checkbox]").click(function(){
+                        var myid = jQuery(this).attr("id");
+                        var myvalue = jQuery(this).val();
+                          MyAllClickManage(myvalue,myid,"' . $base_path . '");
+                 });
+ 	    });', array('type' => 'inline',
+        'scope' => 'footer',
+        'weight' => 5)
+    );
+
+    return $form;
+}
+
+//********************** validate form *****************************//
+
+function tumblr_content_type_validate($form, &$form_state) {
+    // Form submitted, but no modules selected.
+    if (!count(array_filter($form_state['values']['check']))) {
+        drupal_set_message(t('No Content type selected.'), 'error');
+        drupal_goto('admin/config/tumblr/contenttype/settings');
+    }
+}
+
+//*********************** Submit Form *****************************//
+
+function tumblr_content_type_submit($form, &$form_state) {
+
+    $formdata = array_keys($form_state['values']['check']);
+    $formdata1 = array_filter($form_state['values']['check']);
+
+    //*********************** get all values from database ***********************************************//
+
+    $res = db_select('tumblr_fields_data')
+            ->fields('tumblr_fields_data', array('type'))
+            ->execute();
+    $inserted_row = $res->fetchAll();
+
+//  ************************* convert object to Array**************************************//           
+
+    $searchArray = array();
+    if ($inserted_row) {
+        foreach ($inserted_row as $row) {
+            $searchArray[] = $row->type;
+        }
+    }
+    $searchArray = array_unique($searchArray);
+    for ($i = 0; $i < count($formdata); $i++) {
+
+        //******************** Insert Conditions ****************************//
+
+        if (count(array_filter($form_state['values']['check']))) {
+
+            if (!in_array($formdata[$i], $searchArray)) {  // check new value exists in db or not.
+                // echo 'test in case1'; exit;
+                db_insert('tumblr_fields_data')
+                        ->fields(array('type' => $formdata[$i], 'name' => $formdata[$i], 'images' => @$_REQUEST[$formdata[$i]], 'status' => 0))
+                        ->execute();
+            }
+
+
+            //********************* update conditions ****************//     
+
+            if (in_array($formdata[$i], $formdata1)) {
+                db_update('tumblr_fields_data')
+                        ->fields(array(
+                            'images' => @$_REQUEST[$formdata[$i]],
+                            'status' => 1,
+                        ))
+                        ->condition('type', $formdata[$i])
+                        ->execute();
+            } else {                                                  // update all values in 0 by default .
+                db_update('tumblr_fields_data')
+                        ->fields(array(
+                            'images' => @$_REQUEST[$formdata[$i]],
+                            'status' => 0,
+                        ))
+                        ->condition('type', $formdata[$i])
+                        ->execute();
+            }
+        }
+    }
+
+    drupal_set_message(t('Your Settings has been sucuessfully changed.'));
+}
+
+function tumblr_module_setings_form($form, &$form_state) {
+    global $base_path;
+
+    $form['contact_information'] = array(
+//    '#markup' => t('<h1>Enter The Configuration Details of Tumblr Appication.</h1><p><a href="' . $base_path . 'admin/config/tumblr/contenttype/settings">Enable Content Type For Post.</a></p>'),
+        '#markup' => "<h1>" . t('Enter the Configuration Details of Tumblr Application') . '.</h1><a href="' . $base_path . 'admin/config/tumblr/contenttype/settings">' . t('Enable Content Type For Post') . '.</a></p>',
+    );
+
+    $form['tumblr_consumerkey'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Consumer Key.'),
+        '#default_value' => variable_get('tumblr_consumerkey'),
+        '#size' => 100,
+        '#maxlength' => 100,
+        '#description' => t('Please Enter the Consumer Key.'),
+        '#required' => TRUE,
+    );
+
+    $form['tumblr_consumersecret'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Consumer Secret Key.'),
+        '#default_value' => variable_get('tumblr_consumersecret'),
+        '#size' => 100,
+        '#maxlength' => 100,
+        '#description' => t('Please Enter the Consumer Secret key'),
+        '#required' => TRUE,
+    );
+
+    $form['tumblr_outhtoken'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Outh Tokens.'),
+        '#default_value' => variable_get('tumblr_outhtoken'),
+        '#size' => 100,
+        '#maxlength' => 100,
+        '#description' => t('Please Enter the Outh Tokens'),
+        '#required' => TRUE,
+    );
+    $form['tumblr_outhtoken_secret'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Outh Token Secret.'),
+        '#default_value' => variable_get('tumblr_outhtoken_secret'),
+        '#size' => 100,
+        '#maxlength' => 100,
+        '#description' => t('Please Enter the Outh Tokens Secret.'),
+        '#required' => TRUE,
+    );
+    $form['tumblr_basehostname'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Base Host Name.'),
+        '#default_value' => variable_get('tumblr_basehostname'),
+        '#size' => 100,
+        '#maxlength' => 100,
+        '#description' => t('Please Enter the Base Host Name like(example.tumblr.com), if you don\'t have a above details <a href="http://www.tumblr.com/oauth/register">Click to create new.</a>'),
+        '#required' => TRUE,
+    );
+
+    return system_settings_form($form);
+}
+
+function ajaxcallbackpage() {
+
+    $form_value = $_POST['value'];
+
+    $query = db_query("select fci.field_id,fci.field_name from {field_config_instance} fci JOIN {field_config} fc on fc.id=fci.field_id where fc.module=:module and fci.bundle=:bundle", array(":module" => "image", ":bundle" => $form_value));
+
+    echo (!empty($query)) ? "<h6>Choose Image fields. </h6>" : "";
+
+    while ($query1 = $query->fetchAssoc()) {
+
+        $res = db_select('tumblr_fields_data')
+                ->fields('tumblr_fields_data', array('images'))
+                ->condition('type', $form_value)
+                ->execute()
+                ->fetchAssoc();
+        if ($res['images'] == $query1['field_name']) {
+            echo '<input type="radio" name="' . $form_value . '" value="' . $query1['field_name'] . '" checked style="margin-right: 5px;"/>' . ucwords(str_replace("_", " ", str_replace("field_", "", $query1['field_name']))) . '<br>';
+        } else {
+            echo '<input type="radio" name="' . $form_value . '" value="' . $query1['field_name'] . '" style="margin-right: 5px;"/>' . ucwords(str_replace("_", " ", str_replace("field_", "", $query1['field_name']))) . '<br>';
+        }
+    }
+}

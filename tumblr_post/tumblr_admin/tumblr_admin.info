@@ -1,0 +1,5 @@
+name = tumblr_admin
+description = Module to provide admin section to put details and configure content type.
+core = 7.x
+package = Tumblr    
+configure = admin/config/tumblr/settings

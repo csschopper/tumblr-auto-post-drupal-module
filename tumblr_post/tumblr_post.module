@@ -1,0 +1,97 @@
+<?php
+/**
+ * Implements hook_block_info().
+ */
+function tumblr_post_node_insert($node) {
+   global $base_url;
+  echo module_load_include('php', 'tumblr_post', 'tumblroauth/tumblroauth'). "Raushan" ;
+ 
+   // Define the needed keys
+    $consumer_key = variable_get('tumblr_consumerkey');
+    $consumer_secret = variable_get('tumblr_consumersecret');
+    $oauth_token = variable_get('tumblr_outhtoken');
+    $oauth_token_secret = variable_get('tumblr_outhtoken_secret');
+    $base_hostname = variable_get('tumblr_basehostname');
+ /*if($oauth_token){
+	echo $consumer_key." consumer_key </br>";
+	echo $consumer_secret." consumer_secret </br>";
+	echo $oauth_token." oauth_token </br>";
+	echo $oauth_token_secret." oauth_token_secret </br>";
+	echo $base_hostname." base_hostname </br>";
+die;
+} */
+
+//************************* DataBase Query to get Record *************************//
+     $res = db_select('tumblr_fields_data')
+                ->fields('tumblr_fields_data',array('type','images'))
+                 ->condition('status', 1)
+                 ->condition('type', $node->type)
+                 ->groupBy('type')
+                 ->execute()
+                 ->fetchAssoc();
+  
+//*********************posting URI - http://www.tumblr.com/docs/en/api/v2#posting ****************************//
+     
+    $post_URI = 'http://api.tumblr.com/v2/blog/'.$base_hostname.'/post';
+
+    $tum_oauth = new TumblrOAuth($consumer_key, $consumer_secret, $oauth_token, $oauth_token_secret);
+
+// Make an API call with the TumblrOAuth instance. For text Post, pass parameters of type, title, and body
+    $parameters = array();
+    $parameters['type'] = "text";
+    $parameters['title'] = $node->title;
+     
+   if($node->type == $res['type']){
+      
+       $table_name = "field_data_".$res['images'];
+       $fields_name = $res['images']."_fid";
+       
+       $query = db_query("select fmd.uri from {".$table_name."} tn JOIN {file_managed} fmd on tn.".$fields_name."=fmd.fid where tn.bundle=:bundle and tn.entity_id=:entity_id",array(":bundle"=>$res['type'],":entity_id"=>$node->nid));
+  
+            
+        while($query1 = $query->fetchAssoc()){
+           $image_data =  $query1['uri'];
+        }
+  
+       if($image_data)
+       @$image = '<img src="'.file_create_url($image_data).'" alt="images not found" />';
+      
+   }  
+   if($node->language){
+    $str=$node->body[$node->language][0]['value'];
+   }else {
+    $str=$node->body['und'][0]['value'];
+    } 
+    preg_match_all( '/<img[^>]+>/i', $str, $extracted_image );
+
+      $img = array();
+    foreach( $extracted_image[0] as $key=>$img_tag)
+    {
+        preg_match_all('/(src)=("[^"]*")/i',$img_tag, $img[$key]);
+    }
+
+    foreach($img as $value)
+    {
+      $newval=$value[2][0];
+      $newval1= trim($newval,'"');
+
+      if(!(strstr($newval1,'http:')))
+      {
+        
+          $main_arr=explode("/",$base_url.$newval1);
+        $arr_link=array_unique($main_arr);
+        $final_link=implode("/",$arr_link);
+        $str=str_replace($newval1,$final_link,$str);
+
+      }
+            
+    }
+    $parameters['body']='<div>'.@$image.'</div>'.$str;
+
+//************************* Check Content Type *******************************//
+
+            if(($node->type == $res['type'])){
+                $tum_oauth->post($post_URI,$parameters);
+              }
+                 
+ }

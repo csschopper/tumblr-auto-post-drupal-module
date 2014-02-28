@@ -1,0 +1,53 @@
+<?php
+/*
+ *use hook_schema()
+ *  
+ */
+function tumblr_admin_schema() {
+  $schema['tumblr_fields_data'] = array(
+    
+    // Example (partial) specification for table "node".
+    'description' => 'The base table for Tumbler.',
+    'fields' => array(
+      'tid' => array(
+        'description' => 'The primary identifier for a tumblr.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+     
+      'type' => array(
+        'description' => 'The type of content type.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+        
+      'name' => array(
+        'description' => 'The name of content type.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+        
+     'images' => array(
+        'description' => 'The Image Field of content type.',
+        'type' => 'varchar',
+        'length' => 255,
+        'default' => '',
+      ),
+        
+      'status' => array(
+        'description' => 'The check the stauts of content_type.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),  
+    ),
+          'primary key' => array('tid'),
+  );
+  return $schema;
+}
