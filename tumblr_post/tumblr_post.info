@@ -2,6 +2,11 @@ name = Tumblr Post
 description = Tumblr Module post your pages (including title,images,and descriptions) on Tumblr site.
 core = 7.x
 package = Tumblr
+
+dependencies[] = ctools
+dependencies[] = tumblr_admin
+dependencies[] = oauth_common
+
 files[] = tumblr_post.module
 files[] = connect.php
 files[] = callback.php
